@@ -1,0 +1,47 @@
+#!/usr/bin/env wolframscript
+
+filepath = $ScriptCommandLine[[2]];
+potentialValue = ToExpression[$ScriptCommandLine[[3]]];
+l = ToExpression[$ScriptCommandLine[[4]]];
+tInit = 1/1000000000;
+interpolationPoints = 50000;
+
+
+data = Import[filepath, {"CSV","Dataset"}, "HeaderLines" -> 1];
+
+
+vacuumFluctuation[l_, t_?NumericQ] := 
+  ReleaseHold @ 
+   Quiet @ Check[
+     1/Sin[t] LegendreP[
+       N[-1/2 + I Sqrt[potentialValue - 9/4], MachinePrecision], 
+       l + 1, N[Cos[t], MachinePrecision]], 
+     Indeterminate, {Infinity::indet}];
+
+
+sections = 25;
+interpolationSegments = {}; 
+
+For[i = tInit, i <= \[Pi] - tInit - \[Pi]/sections, 
+ i += ((\[Pi] - 2.1 * tInit)/sections), 
+ AppendTo[interpolationSegments, {Interpolation[
+     Table[{x, vacuumFluctuation[l, x] // Re}, {x, i, i + \[Pi]/sections, 
+       1/interpolationPoints}], InterpolationOrder -> 1][t], 
+   i <= t < i + \[Pi]/sections}]]
+vacuumFluctuationInterpolation[t_] = Piecewise[interpolationSegments];
+
+firstDerivative[t_] = 
+  D[vacuumFluctuationInterpolation[x], x] /. {x -> t};
+safeLogarithmicDerivative[t_] := 
+  ReleaseHold @ 
+   Quiet @ Check[
+     Re[firstDerivative[t]]/vacuumFluctuationInterpolation[t], 
+     "NaN", {Infinity::indet}];
+
+
+data = data[All, 
+   Append[#, 
+     "vacuum_fluctuation_logarithmic_derivative_mathematica" -> 
+      safeLogarithmicDerivative[#timeframe]] &];
+
+Export[filepath, data, "CSV"]

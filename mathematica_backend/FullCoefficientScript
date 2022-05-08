@@ -1,0 +1,66 @@
+#!/usr/bin/env wolframscript
+
+filepath = $ScriptCommandLine[[2]];
+potentialValue = ToExpression[$ScriptCommandLine[[3]]];
+l = ToExpression[$ScriptCommandLine[[4]]];
+epsilon = ToExpression[$ScriptCommandLine[[5]]];
+
+data = Import[filepath, {"CSV","Dataset"}, "HeaderLines" -> 1];
+
+
+vacuumFluctuation[t_] = 
+  1/Sin[t] LegendreP[-(1/2) + I Sqrt[potentialValue - 9/4], l+1, Cos[t]];
+
+vacuumFluctuationFirstDerivative[t_] = D[vacuumFluctuation[x], x] /. x -> t;
+
+vacuumFluctuationLogarithmicDerivative[t_] = vacuumFluctuationFirstDerivative[t]/vacuumFluctuation[t];
+
+vacuumFluctuationSafeLogarithmicDerivative[t_] := 
+  ReleaseHold@ Quiet @ Check[vacuumFluctuationLogarithmicDerivative[t], 0];
+
+
+
+
+comovingMomentum[t_, bounceFirstDerivative_] := 1 + (3 * epsilon^2 * Sin[t]^2 * bounceFirstDerivative^2)/(2 * (l *(l + 2) - 3));
+
+comovingMomentumFirstDerivative[t_, bounceFirstDerivative_, bounceSecondDerivative_] :=  (3 * epsilon^2)/(2 * (l *(l + 2) - 3)) (2 *Sin[t]* Cos[t] * bounceFirstDerivative^2 + 2 * Sin[t]^2 * bounceFirstDerivative * bounceSecondDerivative);
+
+comovingMomentumLogarithmicDerivative[t_, bounceFirstDerivative_, bounceSecondDerivative_]  := comovingMomentumFirstDerivative[t, bounceFirstDerivative, bounceSecondDerivative]/comovingMomentum[t, bounceFirstDerivative];
+
+
+
+
+effectivePotential[t_, bounceFirstDerivative_, potentialFirstDerivative_, potentialSecondDerivative_] = -potentialSecondDerivative/
+   comovingMomentum[t, bounceFirstDerivative] + (l * (l + 2))/(comovingMomentum[t, bounceFirstDerivative] * Sin[t]^2) + 
+   3* epsilon * ((2 * bounceFirstDerivative)/
+      comovingMomentum[t, bounceFirstDerivative] + (-Sin[t]^2 potentialFirstDerivative^2 - 
+       5 Sin[t] Cos[t]*bounceFirstDerivative *
+        potentialFirstDerivative - 
+       6 Cos[t]^2*bounceFirstDerivative^2)/(
+      comovingMomentum[t, bounceFirstDerivative]^2* (l* (l + 2) - 3)));
+
+falseEffectivePotential[t_] = potentialValue + (l * (l + 2))/ (
+   Sin[t]^2) ;
+
+
+
+
+coefficientFirstDerivative[t_, bounceFirstDerivative_, bounceSecondDerivative_] := - (2 * vacuumFluctuationSafeLogarithmicDerivative[t] + 3 * Cot[t] - comovingMomentumLogarithmicDerivative[t,bounceFirstDerivative, bounceSecondDerivative])
+
+coefficientZerothDerivative[t_, bounceFirstDerivative_, bounceSecondDerivative_, potentialFirstDerivative_, potentialSecondDerivative_] :=  (comovingMomentum[t, bounceFirstDerivative] * effectivePotential[t, bounceFirstDerivative, potentialFirstDerivative, potentialSecondDerivative] + vacuumFluctuationSafeLogarithmicDerivative[t] * comovingMomentumLogarithmicDerivative[t, bounceFirstDerivative, bounceSecondDerivative] - falseEffectivePotential[t])
+
+
+
+
+data = data[All,
+   Append[#,
+     "coefficient_zeroth_derivative" ->
+      coefficientZerothDerivative[#timeframe, #"bounce_first_derivative", #"bounce_second_derivative", #"potential_first_derivative", #"potential_second_derivative"]] &];
+
+data = data[All,
+   Append[#,
+      "coefficient_first_derivative" ->
+      coefficientFirstDerivative[#timeframe, #"bounce_first_derivative", #"bounce_second_derivative"]] &];
+
+
+Export[filepath, data, "CSV"]

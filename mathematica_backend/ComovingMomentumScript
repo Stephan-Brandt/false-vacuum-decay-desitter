@@ -1,0 +1,20 @@
+#!/usr/bin/env wolframscript
+
+filepath=$ScriptCommandLine[[2]];
+epsilon=ToExpression[$ScriptCommandLine[[3]]];
+l=ToExpression[$ScriptCommandLine[[4]]];
+
+comovingMomentum[t_, bounceFirstDerivative_] := 1 + (3 * epsilon^2 * Sin[t]^2 * bounceFirstDerivative^2)/(2 * (l *(l + 2) - 3));
+
+comovingMomentumFirstDerivative[t_, bounceFirstDerivative_, bounceSecondDerivative_] :=  (3 * epsilon^2)/(2 * (l *(l + 2) - 3)) (2 *Sin[t]* Cos[t] * bounceFirstDerivative^2 + 2 * Sin[t]^2 * bounceFirstDerivative * bounceSecondDerivative);
+
+comovingMomentumLogarithmicDerivative[t_, bounceFirstDerivative_, bounceSecondDerivative_]  := comovingMomentumFirstDerivative[t, bounceFirstDerivative, bounceSecondDerivative]/comovingMomentum[t, bounceFirstDerivative];
+
+
+data=Import[filepath,{"CSV","Dataset"},"HeaderLines"->1]
+
+data=data[All,Append[#,"comoving_momentum_mathematica"->comovingMomentum[#timeframe, #"bounce_first_derivative"]]&];
+
+data=data[All,Append[#,"comoving_momentum_logarithmic_derivative_mathematica"->comovingMomentumLogarithmicDerivative[#timeframe, #"bounce_first_derivative", #"bounce_second_derivative"]]&];
+
+Export[filepath,data,"CSV"]

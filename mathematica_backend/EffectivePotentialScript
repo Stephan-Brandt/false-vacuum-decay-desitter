@@ -1,0 +1,38 @@
+#!/usr/bin/env wolframscript
+
+filepath = $ScriptCommandLine[[2]];
+falseVacuumPotential = ToExpression[$ScriptCommandLine[[3]]];
+epsilon = ToExpression[$ScriptCommandLine[[4]]];
+l = ToExpression[$ScriptCommandLine[[5]]];
+
+
+effectivePotential[t_, bounceFirstDerivative_, comovingMomentum_, 
+   potentialFirstDerivative_, 
+   potentialSecondDerivative_] = -potentialSecondDerivative/
+   comovingMomentum + (l * (l + 2))/(comovingMomentum * Sin[t]^2) + 
+   3* epsilon * ((2 * bounceFirstDerivative)/
+      comovingMomentum + (-Sin[t]^2 potentialFirstDerivative^2 - 
+       5 Sin[t] Cos[t]*bounceFirstDerivative *
+        potentialFirstDerivative - 
+       6 Cos[t]^2*bounceFirstDerivative^2)/(
+      comovingMomentum^2* (l* (l + 2) - 3)));
+
+falseEffectivePotential[t_] = falseVacuumPotential + (l * (l + 2))/ (
+   Sin[t]^2) ;
+
+
+data = Import[filepath, {"CSV", "Dataset"}, "HeaderLines" -> 1]
+
+data = data[All, 
+   Append[#, 
+     "effective_potential_mathematica" -> 
+      effectivePotential[#timeframe, #"bounce_first_derivative", \
+#"comoving_momentum_mathematica", #"potential_first_derivative", \
+#"potential_second_derivative"]] &];
+
+data = data[All, 
+   Append[#, 
+     "false_effective_potential_mathematica" -> 
+      falseEffectivePotential[#timeframe]] &];
+
+Export[filepath, data, "CSV"]
