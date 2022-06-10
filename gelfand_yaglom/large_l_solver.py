@@ -1,3 +1,4 @@
+from copy import deepcopy
 from time import sleep
 
 import matplotlib.pyplot as plt
@@ -13,6 +14,9 @@ from helpers.mathematica_link import MathematicaLink
 
 from model_specific.constant_storage import ConstantStorage
 from model_specific.scale_factor import ScaleFactor
+
+
+NUMBER_OF_CORES = 6
 
 
 class LargeLSolver:
@@ -60,6 +64,8 @@ class LargeLSolver:
         self.cutoff_model = None
 
         self.starting_time_dependency_record = None
+        self.starting_time_model = lambda t, a, b, c: a * np.power(t, b) + c
+        self.extrapolated_convergence_points = []
 
     def multiprocess_det_ratio(self, inplace=True, save=False):
         print("#" * len(self.constants_range))
@@ -79,11 +85,14 @@ class LargeLSolver:
             pool.join()
 
         if inplace:
-            self.dets = np.hstack(
-                [
-                    l_det_log_pairs,
-                    self.get_final_gy_time().reshape(l_det_log_pairs.shape[0], 1),
-                ]
+            self.dets = np.flip(
+                np.hstack(
+                    [
+                        l_det_log_pairs,
+                        self.get_final_gy_time().reshape(l_det_log_pairs.shape[0], 1),
+                    ]
+                ),
+                axis=0,
             )
             if save:
                 self.save_det(self.dets)
@@ -474,3 +483,20 @@ class LargeLSolver:
         )
 
         return coefficients
+
+    def extrapolate_convergence_points_over_starting_time(self):
+        self.extrapolated_convergence_points = []
+        for res in reversed(self.starting_time_dependency_record):
+            coefficients = curve_fit(
+                self.starting_time_model, res[1][:, 0], res[1][:, 1]
+            )
+            self.extrapolated_convergence_points.append(
+                self.starting_time_model(0, *coefficients[0])
+            )
+
+        optimized_large_l_solver = deepcopy(self)
+        optimized_large_l_solver.dets[:, 1] = np.array(
+            self.extrapolated_convergence_points
+        )
+
+        return optimized_large_l_solver
